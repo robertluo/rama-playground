@@ -1,0 +1,6 @@
+.clj-kondo/.cache/
+.clj-kondo/*/
+.calva/
+.lsp/
+.nrepl-port
+.cpcache/

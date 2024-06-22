@@ -1,6 +1,6 @@
 (ns robertluo.word-count
   (:require
-   [com.rpl.rama :as r :refer [deframaop ?<- defmodule]]
+   [com.rpl.rama :as r :refer [deframaop deframafn ?<- defmodule]]
    [com.rpl.rama.aggs :as aggs]
    [com.rpl.rama.ops :as ops]
    [com.rpl.rama.path :as p]
@@ -27,14 +27,16 @@
 ;; Introduce rama test library
 (require '[com.rpl.rama.test :as rtest])
   
-;; I am surprised that rama seems does not provide a stream to sequence function
-;; to make tests easily. So I have to write one.  
-(defn- collect-all [s]
-  (let [cs (atom [])]
-    (?<- (normalize s :> *word)
-         (swap! cs conj *word))
-    @cs))
-  
+(deframafn
+  ^{:doc "A rama function to collect all words in a sentence *s."}
+  collect-all 
+  [*s]
+  (r/<<batch
+   (normalize *s :> *v)
+   (aggs/+vec-agg *v :> *res))
+  (:> *res))
+
+;;Now we can use the operator to normalize a sentence.  
 (collect-all "Hello world from Robert")
   
 ;;## Rama Module
@@ -45,7 +47,7 @@
   WordCountModule [setup topologies]
   
   ;;declare a depot named *sentences
-  (r/declare-depot setup *sentences (r/hash-by identity))
+  (r/declare-depot setup *sentences :random)
   
   ;;make topologies for this depot
   (let [topo (r/stream-topology topologies "word-count")]

@@ -1,6 +1,7 @@
 {:deps
  {com.rpl/rama {:mvn/version "0.16.1" :scope "provided"}
   cheshire/cheshire {:mvn/version "5.13.0"}
+  com.dynatrace.hash4j/hash4j {:mvn/version "0.17.0"}
   clojure.java-time/clojure.java-time {:mvn/version "1.4.2"}}
  :aliases
  {:dev

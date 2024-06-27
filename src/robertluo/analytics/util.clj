@@ -1,20 +1,12 @@
-(ns robertluo.analytics.ull
-  "UltraLogLog sketching implementation in Clojure.
-   This implementation is based on the Java library hash4j.
-
-   Basic usage:
-   (-> (sketch [\"foo\" \"bar\" \"baz\" \"bar\"])
-       count) ;=> 3
-   (-> (sketch [\"foo\" \"bar\"])
-       (union (sketch [\"baz\" \"bar\"]))
-       count) ;=> 3
-  "
+(ns robertluo.analytics.util
+  "Utilities for statistics and analytics" 
   (:require
    [taoensso.nippy :as nippy])
   (:import
    [com.dynatrace.hash4j.hashing Hashing]
    [com.dynatrace.hash4j.distinctcount UltraLogLog]))
 
+;;## UltraLogLog sketching
 (defprotocol Sketchable
   "A protocol for sketching data"
   (-sketch [this words])
@@ -39,6 +31,7 @@
     [_]
     (Math/round (.getDistinctCountEstimate ull))))
 
+;;### interface
 (defn sketch
   "Create a new Sketch with the given words, you can then use `count` function
    to get the estimated number of distinct elements in the set." 
@@ -62,8 +55,7 @@
       (count)) ;=> 4
   )
   
-
-;;Nippy serialization
+;;### Nippy serialization
 ;;
 #_{:clj-kondo/ignore [:unresolved-symbol]}
 (nippy/extend-freeze

@@ -20,21 +20,41 @@
    :display              Keyword        ;;Display mode
    :platform             Keyword        ;;Platform where game played
    :money                Long           ;;Money change delta
-   (s/optional-key :tax) Long           ;;Tax charged
+   :tax                  Long           ;;Tax charged
    :event                Keyword        ;;Event name
    :score                Long           ;;Score change delta
    })
 
-(def json-coercer (cc/coercer (assoc GameScore Keyword s/Any) cc/json-coercion-matcher))
+(def json->GameScore
+  (cc/coercer (assoc GameScore Keyword s/Any) cc/json-coercion-matcher))
+
 (defn samples 
   [filename]
   (let [data (-> (io/reader filename)
                  (json/parse-stream true))]
     (->> data
-         (p/transform [p/ALL] json-coercer))))
+         (p/transform [p/ALL] json->GameScore))))
 
 ^:rct/test
 (comment
-  (json-coercer {:timestamp 100 :score-at 100 :server "foo" :game "bar" :username "foo" :game-id "bar" :display "2D" :platform "PC" :money 100 :event "login" :score 100 :extra {:foo "bar"}})
+  (json->GameScore {:timestamp 100 :score-at 100 :server "foo" :game "bar" :username "foo" :game-id "bar" :display "2D" :platform "PC" :money 100 :event "login" :score 100})
   (count (p/select [p/ALL su/error?] (samples "sample-data/game-score.json"))) ;=> 0
+  )
+
+;;## Agragating data
+
+(defn score-stat
+  [game-scores]
+  (->
+   (->> [:score :money :tax]
+        (map #(->> (p/select [p/ALL %] game-scores)
+                   (transduce identity + 0)))
+        (zipmap [:score :money :tax]))
+   (assoc :cnt (count game-scores))))
+
+^:rct/test
+(comment
+  (score-stat [{:score-at 100 :server "foo" :game "bar" :username "user1" :money 100 :score 1 :tax 10}
+               {:score-at 100 :server "foo" :game "bar" :username "user2" :money 1000 :score 2 :tax 50}])
+  ;=>> {:cnt 2 :score 3 :money 1100 :tax 60}
   )

@@ -1,15 +1,15 @@
-{:deps
- {com.rpl/rama {:mvn/version "0.16.1" :scope "provided"}
-  cheshire/cheshire {:mvn/version "5.13.0"}
-  com.dynatrace.hash4j/hash4j {:mvn/version "0.17.0"}
-  clojure.java-time/clojure.java-time {:mvn/version "1.4.2"}}
- :aliases
- {:dev
-  {:extra-deps {io.github.robertluo/rich-comment-tests #:git{:tag "v1.1.1" :sha "3f65ecb"}}}
-  :doc
-  {:extra-deps {io.github.robertluo/clerk-doc #:git{:tag "v0.2.1" :sha "d2b37f0"}}
-   :exec-fn robertluo.clerk-doc/clj->md
-   :exec-args {:from "src/robertluo/word_count.clj" :to "doc/word_count.md"
-               :eval-code? true}}}
- :mvn/repos
- {"nexus-releases" {:url "https://nexus.redplanetlabs.com/repository/maven-public-releases"}}}
+{:deps      {com.rpl/rama                    {:mvn/version "0.16.1"
+                                              :scope "provided"}
+             cheshire/cheshire               {:mvn/version "5.13.0"}
+             org.github.robertluo/rama-utils #:git{:url "https://github.com/robertluo/rama-utils"
+                                                   :sha "4a8755145ea057edebeac8ae9a0c9dbe895d33cd"}
+             tick/tick                       {:mvn/version "0.7.5"}}
+ :aliases   {:dev {:extra-deps {io.github.robertluo/rich-comment-tests #:git{:tag "v1.1.1"
+                                                                             :sha "3f65ecb"}}}
+             :doc {:extra-deps {io.github.robertluo/clerk-doc #:git{:tag "v0.2.1"
+                                                                    :sha "d2b37f0"}}
+                   :exec-fn    robertluo.clerk-doc/clj->md
+                   :exec-args  {:from       "src/robertluo/word_count.clj"
+                                :to         "doc/word_count.md"
+                                :eval-code? true}}}
+ :mvn/repos {"nexus-releases" {:url "https://nexus.redplanetlabs.com/repository/maven-public-releases"}}}

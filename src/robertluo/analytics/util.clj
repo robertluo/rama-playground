@@ -1,87 +1,29 @@
 (ns robertluo.analytics.util
-  "Utilities for statistics and analytics" 
+  "Utilities for statistics and analytics"
   (:require
-   [taoensso.nippy :as nippy])
-  (:import
-   [com.dynatrace.hash4j.hashing Hashing]
-   [com.dynatrace.hash4j.distinctcount UltraLogLog]))
+   [tick.core :as t]))
 
-;;## UltraLogLog sketching
-(defprotocol Sketchable
-  "A protocol for sketching data"
-  (-sketch [this words])
-  (-merge [this other]))
+;;## Time segmenting
 
-;;A SketchULL is a wrapper over a mutable UltraLogLog Object, with its hasher built in.
-;;Thisstructure that can be used to estimate the number of distinct elements in a set
-;;using the UltraLogLog algorithm. 
-;;(https://javadoc.io/doc/com.dynatrace.hash4j/hash4j/latest/com/dynatrace/hash4j/distinctcount/UltraLogLog.html)
-(deftype SketchULL [^Hashing hasher ^UltraLogLog ull]
-  Sketchable
-  (-sketch
-    [this words]
-    (doseq [word words] 
-      (.add ull (.hashCharsToLong hasher word)))
-    this)
-  (-merge
-    [_ other]
-    (SketchULL. hasher (UltraLogLog/merge ull (.ull other))))
-  clojure.lang.Counted
-  (count
-    [_]
-    (Math/round (.getDistinctCountEstimate ull))))
-
-;;### interface
-(defn sketch
-  "Create a new Sketch with the given words, you can then use `count` function
-   to get the estimated number of distinct elements in the set." 
-  ([words]
-   (-> (SketchULL. (Hashing/komihash5_0) (UltraLogLog/create 12))
-       (-sketch words))))
-
-(defn union
-  "Merge two sketches into one."
-  [sketch1 sketch2]
-  (-merge sketch1 sketch2))
+(defn segment-time
+  "Segment a given instant into minute, hour, day and month.
+    - `timemillis`: The timemillis to be segmented.
+    - option `:zone`: The time zone can be specified with the `zone` option, default to +08."
+  [timemillis & {:keys [zone-hour-offset]
+                 :or   {zone-hour-offset 8}}]
+  (let [zoned   (-> timemillis (t/instant) (t/offset-by (t/zone-offset zone-hour-offset)))
+        minute  (-> zoned (t/with :second-of-minute 0))
+        hour    (-> minute (t/with :minute-of-hour 0))
+        day     (-> hour (t/with :hour-of-day 0))
+        month   (-> day (t/with :day-of-month 1))
+        to-long (fn [zdt] (-> zdt (t/instant) (t/long)))]
+    {:minute (to-long minute)
+     :hour   (to-long hour)
+     :day    (to-long day)
+     :month  (to-long month)}))
 
 ^:rct/test
 (comment
-  ;basic usage
-  (-> (sketch ["foo" "bar" "baz" "bar"])
-      count) ;=> 3
-  ;union
-  (-> (sketch ["foo" "bar" "baz" "secret"])
-      (union (sketch ["baz" "bar"]))
-      (count)) ;=> 4
-  )
-  
-;;### Nippy serialization
-;;
-#_{:clj-kondo/ignore [:unresolved-symbol]}
-(nippy/extend-freeze
- SketchULL ::sketch-ull
- [^SketchULL x ^java.io.DataOutput data-output]
- (let [state (.getState (.ull x))]
-   (.writeInt data-output (alength state))
-   (.write data-output state)))
-
-#_{:clj-kondo/ignore [:unresolved-symbol]}
-(nippy/extend-thaw 
- ::sketch-ull
- [^java.io.DataInput data-input]
- (let [len (.readInt data-input)]
-   (if (pos? len)
-     (let [state (byte-array len)]
-       (.readFully data-input state)
-       (SketchULL. (Hashing/komihash5_0)
-                   (UltraLogLog/wrap state)))
-     (throw (ex-info "Invalid state length" {:len len})))))
-
-^:rct/test
-(comment
-  ;roundtrip freeze/thaw
-  (-> (nippy/freeze (sketch ["foo" "bar" "baz" "bar"]))
-      (nippy/thaw)
-      count) ;=> 3
-  )
-  
+  (t/long (t/now))
+  (segment-time 1720147251) ;=>
+  {:minute 1720140, :hour 1717200, :day 1699200, :month -28800})

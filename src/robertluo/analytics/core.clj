@@ -7,7 +7,7 @@
    [schema.utils :as su]
    [clojure.java.io :as io]
    [com.rpl.rama.path :as p]
-   [robertluo.analytics.util :as util])
+   [robertluo.ull :as ull])
   (:import
    [clojure.lang Keyword]))
 
@@ -33,6 +33,13 @@
   "A json->GameScore coercion function"
   (cc/coercer (assoc GameScore Keyword s/Any) cc/json-coercion-matcher))
 
+(defn json-str->GameScore
+  "Converts a json string to a GameScore record"
+  [json-str]
+  (-> json-str
+      (json/parse-string keyword)
+      json->GameScore))
+
 (defn- samples
   "Reads the game score data from the given `filename`"
   [filename]
@@ -48,60 +55,52 @@
   )
 
 ;;## Aggregating data
-
+;; core data structure for score statistics
 (defrecord
  ScoreStat
- [score-at-to ;To when the score-at ends
-  score       ;total score
-  money       ;total money
-  tax         ;total tax
-  cnt         ;count of records
-  user-sketch ;sketch of distinct users
+ [score-at     ;;latest score-at
+  score        ;;total score
+  money        ;;total money
+  tax          ;;total tax
+  cnt          ;;count of records
+  user-counter ;;sketch of distinct users
   ])
-
 ;TODO t-digest for score distribution
 ;TODO set of distinct games
 
-(defn score-stat
-  "returns a stat map for the given `game-scores`"
-  [game-scores]
-  (->
-   (->> [:score :money :tax]
-        (map #(->> (p/select [p/ALL %] game-scores)
-                   (transduce identity + 0)))
-        (zipmap [:score :money :tax]))
-   (assoc :cnt (count game-scores)
-          :user-sketch (->> (p/select [p/ALL :username] game-scores)
-                            (util/sketch))
-          :score-at-to (->> game-scores
-                            (p/select [p/ALL :score-at])
-                            (apply max)))))
+(defn nil-stat []
+  (->ScoreStat 0 0 0 0 0 (ull/create-ull)))
+
+(defn single-stat [game-score]
+  (->ScoreStat
+   (:score-at game-score)
+   (:score game-score)
+   (:money game-score)
+   (:tax game-score)
+   1
+   (-> (ull/create-ull) (ull/add-string (:username game-score)))))
 
 (defn game-stat-merge
   "Merges two score stats into one"
   [stat1 stat2]
   (->ScoreStat
-   (max (:score-at-to stat1) (:score-at-to stat2))
+   (max (:score-at stat1) (:score-at stat2))
    (+ (:score stat1) (:score stat2))
    (+ (:money stat1) (:money stat2))
    (+ (:tax stat1) (:tax stat2))
    (+ (:cnt stat1) (:cnt stat2))
-   (util/union (:user-sketch stat1) (:user-sketch stat2))))
+   (ull/union (:user-counter stat1) (:user-counter stat2))))
 
 ^:rct/test
 (comment
-  ;testing score-stat
-  (score-stat [{:score-at 10  :server "foo" :game "bar" :username "user1" :money 100 :score 1 :tax 10}
-               {:score-at 100 :server "foo" :game "bar" :username "user2" :money 1000 :score 2 :tax 50}])
+  (nil-stat)
   ;=>>
-  {:score-at-to 100 :cnt 2 :score 3 :money 1100 :tax 60 :user-sketch #(= 2 (count %))}
-
+  {:user-counter #(zero? (ull/estimate-count %))}
+  
   ;testing merge
-  (game-stat-merge (score-stat [{:score-at 100 :server "foo" :game "bar" :username "user1" :money 100 :score 1 :tax 10}])
-                   (score-stat [{:score-at 100 :server "foo" :game "bar" :username "user2" :money 1000 :score 2 :tax 50}]))
+  (game-stat-merge 
+   (single-stat {:score-at 100 :score 100 :money 100 :tax 10 :username "foo"})
+   (single-stat {:score-at 200 :score 200 :money 200 :tax 20 :username "bar"}))
   ;=>>
-  {:score 3, :money 1100, :tax 60, :cnt 2, :user-sketch #(= 2 (count %))}
+  {:score-at 200, :score 300 :money 300, :tax 30, :cnt 2, :user-counter #(= 2 (ull/estimate-count %))}
   )
-
-;;## Merge/segment by time
-;;For a batch of game scores, we make it a score stat, however, when we merge them, we need to segment them by time (score-at)
